@@ -1,7 +1,8 @@
-use crate::stars::Star;
 use crate::tree::Node;
+use crate::Star;
 use bytemuck::{Pod, Zeroable};
 use nalgebra::Vector2;
+use palette::rgb::Rgb;
 use rayon::prelude::*;
 use std::cmp::Ordering;
 use std::mem::size_of;
@@ -187,10 +188,14 @@ impl State {
 
         let instances: Vec<_> = stars
             .iter()
-            .map(|star| RenderInstance {
-                position: [star.pos().x, star.pos().y],
-                color: [1.0; 3], // TODO: better coloring, based on wavelength?
-                radius: (0.75 * star.mass() / Star::DENSITY).cbrt(),
+            .map(|star| {
+                let color = ColorMap::STARS.get(star.mass() / 1000.0);
+
+                RenderInstance {
+                    position: [star.pos().x, star.pos().y],
+                    color: [color.red, color.green, color.blue], // TODO: better coloring, based on wavelength?
+                    radius: (0.75 * star.mass() / Star::DENSITY).cbrt(),
+                }
             })
             .collect();
         let instance_buffer = device.create_buffer_init(&BufferInitDescriptor {
@@ -285,7 +290,7 @@ impl State {
     }
 
     pub fn update(&mut self) {
-        const SCALE: f32 = 500.0;
+        const SCALE: f32 = 1500.0;
 
         let mut tree = Node::new_root(-Vector2::repeat(SCALE / 2.0), SCALE);
 
@@ -298,9 +303,9 @@ impl State {
 
         // calculate force on stars
         self.stars
-            .iter_mut()
+            .par_iter_mut()
             .filter(|star| tree.contains(star.pos()))
-            .par_bridge()
+            // .par_bridge()
             .for_each(|star| {
                 let force = tree.force_on(&star.mass_point);
                 star.vel += force / star.mass();
@@ -309,14 +314,14 @@ impl State {
         // integration step
         self.stars
             .iter_mut()
-            .par_bridge()
+            // .par_bridge()
             .for_each(|star| star.mass_point.position += star.vel);
 
         // update instances
         self.instances
             .iter_mut()
             .enumerate()
-            .par_bridge()
+            // .par_bridge()
             .for_each(|(i, instance)| {
                 let position = self.stars[i].pos();
                 instance.position = [position.x, position.y];
@@ -371,5 +376,33 @@ impl State {
 
         current_texture.present();
         Ok(())
+    }
+}
+
+struct ColorMap<'a> {
+    colors: &'a [(f32, f32, f32)],
+}
+
+impl<'a> ColorMap<'a> {
+    pub const STARS: ColorMap<'static> = ColorMap {
+        colors: &[
+            (255.0, 181.0 / 255.0, 108.0 / 255.0),
+            (255.0, 218.0 / 255.0, 181.0 / 255.0),
+            (255.0, 237.0 / 255.0, 227.0 / 255.0),
+            (249.0 / 255.0, 245.0 / 255.0, 255.0),
+            (213.0 / 255.0, 224.0 / 255.0, 255.0),
+            (162.0 / 255.0, 192.0 / 255.0, 255.0),
+            (146.0 / 255.0, 181.0 / 255.0, 255.0),
+        ],
+    };
+
+    pub fn get(&self, t: f32) -> Rgb {
+        let i = ((self.colors.len() - 1) as f32 * t).floor() as usize;
+
+        Rgb::new(
+            (1.0 - t) * self.colors[i].0 + t * self.colors[i + 1].0 * t,
+            (1.0 - t) * self.colors[i].1 + t * self.colors[i + 1].1 * t,
+            (1.0 - t) * self.colors[i].2 + t * self.colors[i + 1].2 * t,
+        )
     }
 }

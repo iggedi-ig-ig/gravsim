@@ -4,7 +4,6 @@ layout (push_constant) uniform Uniforms {
     float invAspect;
     float renderScale;
     float renderOffsX, renderOffsZ;
-    float starDensity;
 } uniforms;
 
 layout (location = 0) out vec3 out_vColor;

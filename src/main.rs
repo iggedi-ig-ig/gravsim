@@ -1,9 +1,8 @@
-pub mod stars;
 pub mod state;
 pub mod tree;
 
-use crate::stars::Star;
 use crate::state::State;
+use crate::tree::Star;
 use nalgebra::Vector2;
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
@@ -15,21 +14,19 @@ use winit::window::Window;
 
 #[tokio::main]
 async fn main() {
+    const ALPHA: f32 = 20.0;
+
     let event_loop = EventLoop::new();
     let window = Window::new(&event_loop).expect("failed to create window");
 
-    const ALPHA: f32 = 15.0;
     let mut rng = StdRng::from_entropy();
-    let stars = (0..100_000)
+    let stars: Vec<_> = (0..100_000)
         .map(|_| {
-            let angle = rng.gen::<f32>() * std::f32::consts::TAU;
-            let distance = (rng.gen::<f32>() * 250.0f32.powi(2)).sqrt();
+            let a = rng.gen::<f32>() * std::f32::consts::TAU;
+            let d = (rng.gen::<f32>() * 400.0 * 400.0).sqrt();
+            let mass = 1000.0 * (rng.gen::<f32>() * ALPHA).exp_m1() / ALPHA.exp_m1();
 
-            Star::new(
-                Vector2::new(angle.sin(), angle.cos()) * distance,
-                Vector2::zeros(),
-                25.0 * (ALPHA * rng.gen::<f32>()).exp_m1() / ALPHA.exp_m1(),
-            )
+            Star::new(Vector2::new(a.sin(), a.cos()) * d, Vector2::zeros(), mass)
         })
         .collect();
 
@@ -60,7 +57,7 @@ async fn main() {
         Event::RedrawRequested(window_id)
             if window_id == window.id() && last.elapsed() > Duration::from_millis(30) =>
         {
-            state.update();
+            (0..2).for_each(|_| state.update());
             last = Instant::now();
 
             match state.render() {

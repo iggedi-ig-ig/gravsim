@@ -1,6 +1,7 @@
 use nalgebra::Vector2;
 use num_enum::TryFromPrimitive;
 use smallvec::{smallvec, SmallVec};
+use std::collections::VecDeque;
 
 /// represents one quadrant of a node.
 /// The corresponding u8 value is the index of the quadrant in the child list.
@@ -39,6 +40,42 @@ impl Quadrant {
     }
 }
 
+#[derive(Copy, Clone, Debug)]
+pub struct Star {
+    pub mass_point: MassData,
+    pub vel: Vector2<f32>,
+}
+
+impl Star {
+    pub const DENSITY: f32 = 250.0;
+
+    pub fn new(pos: Vector2<f32>, vel: Vector2<f32>, mass: f32) -> Self {
+        Self {
+            mass_point: MassData {
+                position: pos,
+                mass,
+            },
+            vel,
+        }
+    }
+
+    pub fn radius(&self) -> f32 {
+        (0.75 * self.mass_point.mass / Self::DENSITY).cbrt()
+    }
+
+    pub fn color(&self) -> [f32; 3] {
+        todo!("color based on mass?")
+    }
+
+    pub fn mass(&self) -> f32 {
+        self.mass_point.mass
+    }
+
+    pub fn pos(&self) -> &Vector2<f32> {
+        &self.mass_point.position
+    }
+}
+
 /// Represents a mass point in space.
 #[derive(Copy, Clone, Debug)]
 pub struct MassData {
@@ -53,12 +90,12 @@ pub struct Node {
 
     center_of_mass: MassData,
     children: SmallVec<[Option<Box<Node>>; 4]>,
-    depth: usize,
+    leaf: bool,
 }
 
 impl Node {
-    const THETA: f32 = 1.25;
-    const GRAVITY: f32 = 1e-4;
+    const THETA: f32 = 1.3;
+    pub const GRAVITY: f32 = 1e-4;
 
     pub fn new_root(pos: Vector2<f32>, scale: f32) -> Self {
         Self {
@@ -69,7 +106,7 @@ impl Node {
                 mass: 0.0,
             },
             children: smallvec![None; 4],
-            depth: 0,
+            leaf: true,
         }
     }
 
@@ -79,18 +116,21 @@ impl Node {
             scale: parent.scale * 0.5,
             center_of_mass: mass_data,
             children: smallvec![None; 4],
-            depth: parent.depth + 1,
+            leaf: true,
         })
     }
 
     pub fn insert(&mut self, obj: &MassData) {
         if self.center_of_mass.mass == 0.0 {
-            // if this is root node, don't subdivide
+            // if this is the root node, don't subdivide
             self.center_of_mass = *obj;
             return;
         } else if obj.mass == 0.0
-            || ((obj.position.x - self.center_of_mass.position.x).abs() < 1e-3
-                && (obj.position.y - self.center_of_mass.position.y).abs() < 1e-3)
+            || obj
+                .position
+                .iter()
+                .zip(self.pos.iter())
+                .all(|(a, b)| (a - b).abs() < 1e-3)
         {
             return;
         }
@@ -101,8 +141,7 @@ impl Node {
             let offset = self.center_of_mass.position - self.pos;
             let quadrant = Quadrant::from_offset(&offset, self.scale);
 
-            self.children[quadrant as usize] =
-                Some(Self::new_child(self, quadrant, self.center_of_mass))
+            self.insert_into(quadrant, &self.center_of_mass.clone())
         }
 
         // update center of mass
@@ -114,6 +153,11 @@ impl Node {
         let offset = obj.position - self.pos;
         let quadrant = Quadrant::from_offset(&offset, self.scale);
 
+        self.insert_into(quadrant, obj);
+    }
+
+    fn insert_into(&mut self, quadrant: Quadrant, obj: &MassData) {
+        self.leaf = false;
         if let Some(child) = &mut self.children[quadrant as usize] {
             // if there already exists a child in this quadrant,
             // insert into that node to subdivide eventually.
@@ -125,23 +169,29 @@ impl Node {
     }
 
     pub fn force_on(&self, obj: &MassData) -> Vector2<f32> {
-        let diff = self.center_of_mass.position - obj.position;
-        let dist = (0.125 + diff.norm_squared()).sqrt();
+        const EPSILON: f32 = 0.01;
 
-        let q = self.scale / dist;
-        if q < Self::THETA || (q.is_normal() && self.is_leaf()) {
-            Self::GRAVITY * diff / dist.powi(3) * self.center_of_mass.mass * obj.mass
-        } else {
-            self.children
-                .iter()
-                .flatten()
-                .map(|c| c.force_on(obj))
-                .sum()
+        // factor out G and obj.mass
+        let mut force_part = Vector2::zeros();
+
+        // bfs
+        let mut queue = VecDeque::from([self]);
+        while let Some(node) = queue.pop_front() {
+            let diff = node.center_of_mass.position - obj.position;
+            let dist = (EPSILON + diff.norm_squared()).sqrt();
+
+            let q = node.scale / dist;
+            if q < Self::THETA || node.is_leaf() {
+                force_part += diff / dist.powi(3) * node.center_of_mass.mass;
+            } else {
+                queue.extend(node.children.iter().flatten().map(|n| n.as_ref()));
+            }
         }
+        Self::GRAVITY * obj.mass * force_part
     }
 
     pub fn is_leaf(&self) -> bool {
-        !self.children.iter().any(|c| c.is_some())
+        self.leaf
     }
 
     pub fn contains(&self, pos: &Vector2<f32>) -> bool {
