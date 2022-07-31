@@ -1,8 +1,9 @@
+pub mod simulation;
 pub mod state;
 pub mod tree;
 
+use crate::simulation::{Simulation, Star};
 use crate::state::State;
-use crate::tree::Star;
 use nalgebra::Vector2;
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
@@ -14,23 +15,21 @@ use winit::window::Window;
 
 #[tokio::main]
 async fn main() {
-    const ALPHA: f32 = 20.0;
+    const ALPHA: f32 = 35.0;
 
     let event_loop = EventLoop::new();
     let window = Window::new(&event_loop).expect("failed to create window");
 
     let mut rng = StdRng::from_entropy();
-    let stars: Vec<_> = (0..100_000)
-        .map(|_| {
-            let a = rng.gen::<f32>() * std::f32::consts::TAU;
-            let d = (rng.gen::<f32>() * 400.0 * 400.0).sqrt();
-            let mass = 1000.0 * (rng.gen::<f32>() * ALPHA).exp_m1() / ALPHA.exp_m1();
+    let simulation = Simulation::new((0..100_000).map(|_| {
+        let a = rng.gen::<f32>() * std::f32::consts::TAU;
+        let d = (rng.gen::<f32>() * 400.0 * 400.0).sqrt();
+        let mass = 100.0 * (rng.gen::<f32>() * ALPHA).exp_m1() / ALPHA.exp_m1();
 
-            Star::new(Vector2::new(a.sin(), a.cos()) * d, Vector2::zeros(), mass)
-        })
-        .collect();
+        Star::new(Vector2::new(a.sin(), a.cos()) * d, Vector2::zeros(), mass)
+    }));
 
-    let mut state = State::new(&window, stars).await;
+    let mut state = State::new(&window, simulation).await;
     let mut last = Instant::now();
     event_loop.run(move |event, _, control_flow| match event {
         Event::WindowEvent {
@@ -57,7 +56,7 @@ async fn main() {
         Event::RedrawRequested(window_id)
             if window_id == window.id() && last.elapsed() > Duration::from_millis(30) =>
         {
-            (0..2).for_each(|_| state.update());
+            state.update();
             last = Instant::now();
 
             match state.render() {

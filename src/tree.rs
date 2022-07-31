@@ -1,3 +1,5 @@
+use crate::simulation::MassData;
+use crate::Simulation;
 use nalgebra::Vector2;
 use num_enum::TryFromPrimitive;
 use smallvec::{smallvec, SmallVec};
@@ -40,49 +42,6 @@ impl Quadrant {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
-pub struct Star {
-    pub mass_point: MassData,
-    pub vel: Vector2<f32>,
-}
-
-impl Star {
-    pub const DENSITY: f32 = 250.0;
-
-    pub fn new(pos: Vector2<f32>, vel: Vector2<f32>, mass: f32) -> Self {
-        Self {
-            mass_point: MassData {
-                position: pos,
-                mass,
-            },
-            vel,
-        }
-    }
-
-    pub fn radius(&self) -> f32 {
-        (0.75 * self.mass_point.mass / Self::DENSITY).cbrt()
-    }
-
-    pub fn color(&self) -> [f32; 3] {
-        todo!("color based on mass?")
-    }
-
-    pub fn mass(&self) -> f32 {
-        self.mass_point.mass
-    }
-
-    pub fn pos(&self) -> &Vector2<f32> {
-        &self.mass_point.position
-    }
-}
-
-/// Represents a mass point in space.
-#[derive(Copy, Clone, Debug)]
-pub struct MassData {
-    pub position: Vector2<f32>,
-    pub mass: f32,
-}
-
 #[derive(Clone, Debug)]
 pub struct Node {
     pos: Vector2<f32>,
@@ -94,9 +53,6 @@ pub struct Node {
 }
 
 impl Node {
-    const THETA: f32 = 1.3;
-    pub const GRAVITY: f32 = 1e-4;
-
     pub fn new_root(pos: Vector2<f32>, scale: f32) -> Self {
         Self {
             pos,
@@ -181,13 +137,13 @@ impl Node {
             let dist = (EPSILON + diff.norm_squared()).sqrt();
 
             let q = node.scale / dist;
-            if q < Self::THETA || node.is_leaf() {
+            if q < Simulation::THETA || node.is_leaf() {
                 force_part += diff / dist.powi(3) * node.center_of_mass.mass;
             } else {
                 queue.extend(node.children.iter().flatten().map(|n| n.as_ref()));
             }
         }
-        Self::GRAVITY * obj.mass * force_part
+        Simulation::GRAVITY * obj.mass * force_part
     }
 
     pub fn is_leaf(&self) -> bool {

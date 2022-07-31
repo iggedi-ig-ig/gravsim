@@ -1,9 +1,5 @@
-use crate::tree::Node;
-use crate::Star;
+use crate::simulation::Simulation;
 use bytemuck::{Pod, Zeroable};
-use nalgebra::Vector2;
-use palette::rgb::Rgb;
-use rayon::prelude::*;
 use std::cmp::Ordering;
 use std::mem::size_of;
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
@@ -53,7 +49,7 @@ pub struct PushConstants {
 }
 
 pub struct State {
-    pub stars: Vec<Star>,
+    pub simulation: Simulation,
 
     pub size: PhysicalSize<u32>,
     pub surface: Surface,
@@ -77,7 +73,7 @@ pub struct State {
 impl State {
     const VERTEX_COUNT: usize = 25;
 
-    pub async fn new(window: &Window, stars: Vec<Star>) -> Self {
+    pub async fn new(window: &Window, simulation: Simulation) -> Self {
         let size = window.inner_size();
 
         let instance = Instance::new(Backends::VULKAN);
@@ -186,16 +182,13 @@ impl State {
             usage: BufferUsages::INDEX,
         });
 
-        let instances: Vec<_> = stars
+        let instances: Vec<_> = simulation
+            .stars
             .iter()
-            .map(|star| {
-                let color = ColorMap::STARS.get(star.mass() / 1000.0);
-
-                RenderInstance {
-                    position: [star.pos().x, star.pos().y],
-                    color: [color.red, color.green, color.blue], // TODO: better coloring, based on wavelength?
-                    radius: (0.75 * star.mass() / Star::DENSITY).cbrt(),
-                }
+            .map(|star| RenderInstance {
+                position: [star.pos().x, star.pos().y],
+                color: star.color(),
+                radius: star.radius(),
             })
             .collect();
         let instance_buffer = device.create_buffer_init(&BufferInitDescriptor {
@@ -211,7 +204,7 @@ impl State {
         };
 
         Self {
-            stars,
+            simulation,
 
             size,
             surface,
@@ -290,43 +283,17 @@ impl State {
     }
 
     pub fn update(&mut self) {
-        const SCALE: f32 = 1500.0;
+        // update simulation state
+        self.simulation.update();
 
-        let mut tree = Node::new_root(-Vector2::repeat(SCALE / 2.0), SCALE);
-
-        // insert stars into tree
-        for star in &self.stars {
-            if tree.contains(star.pos()) {
-                tree.insert(&star.mass_point);
-            }
-        }
-
-        // calculate force on stars
-        self.stars
-            .par_iter_mut()
-            .filter(|star| tree.contains(star.pos()))
-            // .par_bridge()
-            .for_each(|star| {
-                let force = tree.force_on(&star.mass_point);
-                star.vel += force / star.mass();
-            });
-
-        // integration step
-        self.stars
-            .iter_mut()
-            // .par_bridge()
-            .for_each(|star| star.mass_point.position += star.vel);
-
-        // update instances
+        // update instance buffer
         self.instances
             .iter_mut()
             .enumerate()
             // .par_bridge()
             .for_each(|(i, instance)| {
-                let position = self.stars[i].pos();
+                let position = self.simulation.stars[i].pos();
                 instance.position = [position.x, position.y];
-
-                // let kinetic_energy = 0.5 * self.stars[i].mass() * self.stars[i].vel.norm_squared();
             });
 
         self.instance_buffer.destroy();
@@ -376,33 +343,5 @@ impl State {
 
         current_texture.present();
         Ok(())
-    }
-}
-
-struct ColorMap<'a> {
-    colors: &'a [(f32, f32, f32)],
-}
-
-impl<'a> ColorMap<'a> {
-    pub const STARS: ColorMap<'static> = ColorMap {
-        colors: &[
-            (255.0, 181.0 / 255.0, 108.0 / 255.0),
-            (255.0, 218.0 / 255.0, 181.0 / 255.0),
-            (255.0, 237.0 / 255.0, 227.0 / 255.0),
-            (249.0 / 255.0, 245.0 / 255.0, 255.0),
-            (213.0 / 255.0, 224.0 / 255.0, 255.0),
-            (162.0 / 255.0, 192.0 / 255.0, 255.0),
-            (146.0 / 255.0, 181.0 / 255.0, 255.0),
-        ],
-    };
-
-    pub fn get(&self, t: f32) -> Rgb {
-        let i = ((self.colors.len() - 1) as f32 * t).floor() as usize;
-
-        Rgb::new(
-            (1.0 - t) * self.colors[i].0 + t * self.colors[i + 1].0 * t,
-            (1.0 - t) * self.colors[i].1 + t * self.colors[i + 1].1 * t,
-            (1.0 - t) * self.colors[i].2 + t * self.colors[i + 1].2 * t,
-        )
     }
 }
