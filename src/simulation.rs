@@ -26,9 +26,8 @@ impl Star {
         (0.75 * self.mass_point.mass / Self::DENSITY).cbrt()
     }
 
-    pub fn color(&self) -> [f32; 3] {
-        let rgb = ColorMap::STARS.get(self.mass() / 100.0);
-        [rgb.red, rgb.green, rgb.blue]
+    pub fn color(&self, _mass_dist: &MassDistribution) -> [f32; 3] {
+        [1.0; 3]
     }
 
     pub fn mass(&self) -> f32 {
@@ -49,26 +48,26 @@ pub struct MassData {
 
 pub struct Simulation {
     pub stars: Vec<Star>,
+    pub mass_dist: MassDistribution,
 }
 
 impl Simulation {
-    pub const THETA: f32 = 1.2;
-    pub const GRAVITY: f32 = 6.67e-11;
-    pub const TIME_STEP: f32 = 3600.0 * 24.0 * 7.0;
+    pub const SCALE: f32 = 1500.0;
+    pub const THETA: f32 = 1.1;
+    pub const GRAVITY: f32 = 1e-4;
 
-    pub fn new<I>(stars: I) -> Self
+    pub fn new<I>(stars: I, mass_dist: MassDistribution) -> Self
     where
         I: IntoIterator<Item = Star>,
     {
         Self {
             stars: stars.into_iter().collect(),
+            mass_dist,
         }
     }
 
     pub fn update(&mut self) {
-        const SCALE: f32 = 1500.0;
-
-        let mut tree = Node::new_root(-Vector2::repeat(SCALE / 2.0), SCALE);
+        let mut tree = Node::new_root(-Vector2::repeat(Self::SCALE / 2.0), Self::SCALE);
 
         // insert stars into tree
         for star in &self.stars {
@@ -89,35 +88,28 @@ impl Simulation {
         // integration step
         self.stars
             .iter_mut()
-            .for_each(|star| star.mass_point.position += star.vel * Self::TIME_STEP);
+            .for_each(|star| star.mass_point.position += star.vel);
     }
 }
 
-struct ColorMap<'a> {
-    colors: &'a [(f32, f32, f32)],
+#[derive(Copy, Clone, Debug)]
+pub struct MassDistribution {
+    alpha: f32,
+    max_mass: f32,
 }
 
-impl<'a> ColorMap<'a> {
-    pub const STARS: ColorMap<'static> = ColorMap {
-        colors: &[
-            (255.0, 181.0 / 255.0, 108.0 / 255.0),
-            (255.0, 218.0 / 255.0, 181.0 / 255.0),
-            (255.0, 237.0 / 255.0, 227.0 / 255.0),
-            (249.0 / 255.0, 245.0 / 255.0, 255.0),
-            (213.0 / 255.0, 224.0 / 255.0, 255.0),
-            (162.0 / 255.0, 192.0 / 255.0, 255.0),
-            (146.0 / 255.0, 181.0 / 255.0, 255.0),
-        ],
-    };
+impl MassDistribution {
+    pub fn new(alpha: f32, max_mass: f32) -> Self {
+        Self { alpha, max_mass }
+    }
+}
 
-    pub fn get(&self, t: f32) -> Rgb {
-        // this is the index of the "lower" color.
-        let i = ((self.colors.len() - 1) as f32 * t).floor() as usize;
+impl MassDistribution {
+    pub fn sample(&self, t: f32) -> f32 {
+        self.max_mass * ((self.alpha * t).exp_m1() / self.alpha.exp_m1()).min(1.0)
+    }
 
-        Rgb::new(
-            (1.0 - t) * self.colors[i].0 + t * self.colors[i + 1].0 * t,
-            (1.0 - t) * self.colors[i].1 + t * self.colors[i + 1].1 * t,
-            (1.0 - t) * self.colors[i].2 + t * self.colors[i + 1].2 * t,
-        )
+    pub fn eval_inv(&self, x: f32) -> f32 {
+        (self.alpha.exp_m1() * x / self.max_mass + 1.0).ln() / self.alpha
     }
 }

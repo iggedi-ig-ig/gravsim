@@ -81,13 +81,7 @@ impl Node {
             // if this is the root node, don't subdivide
             self.center_of_mass = *obj;
             return;
-        } else if obj.mass == 0.0
-            || obj
-                .position
-                .iter()
-                .zip(self.pos.iter())
-                .all(|(a, b)| (a - b).abs() < 1e-3)
-        {
+        } else if obj.mass == 0.0 {
             return;
         }
 
@@ -125,7 +119,7 @@ impl Node {
     }
 
     pub fn force_on(&self, obj: &MassData) -> Vector2<f32> {
-        const EPSILON: f32 = 0.01;
+        const EPSILON: f32 = 0.05;
 
         // factor out G and obj.mass
         let mut force_part = Vector2::zeros();

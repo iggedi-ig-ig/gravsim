@@ -1,5 +1,6 @@
 use crate::simulation::Simulation;
 use bytemuck::{Pod, Zeroable};
+use rayon::prelude::*;
 use std::cmp::Ordering;
 use std::mem::size_of;
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
@@ -64,7 +65,6 @@ pub struct State {
     pub index_buffer: Buffer,
 
     pub index_count: u32,
-    pub instance_count: u32,
 
     pub push_constants: PushConstants,
     pub instances: Vec<RenderInstance>,
@@ -187,7 +187,7 @@ impl State {
             .iter()
             .map(|star| RenderInstance {
                 position: [star.pos().x, star.pos().y],
-                color: star.color(),
+                color: star.color(&simulation.mass_dist),
                 radius: star.radius(),
             })
             .collect();
@@ -219,7 +219,6 @@ impl State {
             instance_buffer,
 
             index_count: indices.len() as u32,
-            instance_count: instances.len() as u32,
 
             push_constants,
             instances,
@@ -284,13 +283,12 @@ impl State {
 
     pub fn update(&mut self) {
         // update simulation state
-        self.simulation.update();
+        (0..5).for_each(|_| self.simulation.update());
 
         // update instance buffer
         self.instances
-            .iter_mut()
+            .par_iter_mut()
             .enumerate()
-            // .par_bridge()
             .for_each(|(i, instance)| {
                 let position = self.simulation.stars[i].pos();
                 instance.position = [position.x, position.y];
@@ -337,7 +335,7 @@ impl State {
             render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
             render_pass.set_index_buffer(self.index_buffer.slice(..), IndexFormat::Uint16);
 
-            render_pass.draw_indexed(0..self.index_count, 0, 0..self.instance_count);
+            render_pass.draw_indexed(0..self.index_count, 0, 0..self.instances.len() as u32);
         }
         self.queue.submit(Some(command_encoder.finish()));
 

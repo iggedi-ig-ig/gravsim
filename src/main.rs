@@ -2,9 +2,9 @@ pub mod simulation;
 pub mod state;
 pub mod tree;
 
-use crate::simulation::{Simulation, Star};
+use crate::simulation::{MassDistribution, Simulation, Star};
 use crate::state::State;
-use nalgebra::Vector2;
+use nalgebra::{Vector2, Vector3};
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use std::time::{Duration, Instant};
@@ -15,19 +15,33 @@ use winit::window::Window;
 
 #[tokio::main]
 async fn main() {
-    const ALPHA: f32 = 35.0;
-
     let event_loop = EventLoop::new();
     let window = Window::new(&event_loop).expect("failed to create window");
 
     let mut rng = StdRng::from_entropy();
-    let simulation = Simulation::new((0..100_000).map(|_| {
-        let a = rng.gen::<f32>() * std::f32::consts::TAU;
-        let d = (rng.gen::<f32>() * 400.0 * 400.0).sqrt();
-        let mass = 100.0 * (rng.gen::<f32>() * ALPHA).exp_m1() / ALPHA.exp_m1();
+    let mass_distribution = MassDistribution::new(75.0, 500.0);
+    let center_star = Star::new(Vector2::zeros(), Vector2::zeros(), 1_000_000.0);
+    let simulation = Simulation::new(
+        (0..25_000)
+            .map(|_| {
+                let a = rng.gen::<f32>() * std::f32::consts::TAU;
+                let d = 500.0 * (rng.gen::<f32>()).sqrt();
+                let mass = 1.0 + mass_distribution.sample(rng.gen());
 
-        Star::new(Vector2::new(a.sin(), a.cos()) * d, Vector2::zeros(), mass)
-    }));
+                let pos = Vector2::new(a.sin(), a.cos()) * d;
+                let n = Vector3::cross(&*Vector3::z_axis(), &Vector3::new(pos.x, pos.y, 0.0));
+
+                Star::new(
+                    pos,
+                    n.xy().normalize()
+                        * (0.5 + rng.gen::<f32>())
+                        * (Simulation::GRAVITY * (mass + center_star.mass()) / d).sqrt(),
+                    mass,
+                )
+            })
+            .chain(Some(center_star)),
+        mass_distribution,
+    );
 
     let mut state = State::new(&window, simulation).await;
     let mut last = Instant::now();
