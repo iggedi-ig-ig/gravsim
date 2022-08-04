@@ -1,7 +1,9 @@
 use crate::tree::Node;
 use nalgebra::Vector2;
-use palette::rgb::Rgb;
 use rayon::prelude::*;
+use serde::{Deserialize, Serialize};
+
+pub mod tree;
 
 #[derive(Copy, Clone, Debug)]
 pub struct Star {
@@ -40,7 +42,7 @@ impl Star {
 }
 
 /// Represents a mass point in space.
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
 pub struct MassData {
     pub position: Vector2<f32>,
     pub mass: f32,
@@ -78,7 +80,7 @@ impl Simulation {
 
         // calculate force on stars
         self.stars
-            .par_iter_mut()
+            .iter_mut()
             .filter(|star| tree.contains(star.pos()))
             .for_each(|star| {
                 let force = tree.force_on(&star.mass_point);

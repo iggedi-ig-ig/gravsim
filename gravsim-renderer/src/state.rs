@@ -1,5 +1,5 @@
-use crate::simulation::Simulation;
 use bytemuck::{Pod, Zeroable};
+use gravsim_simulation::Simulation;
 use rayon::prelude::*;
 use std::cmp::Ordering;
 use std::mem::size_of;
@@ -194,7 +194,7 @@ impl State {
         let instance_buffer = device.create_buffer_init(&BufferInitDescriptor {
             label: None,
             contents: bytemuck::cast_slice(&instances),
-            usage: BufferUsages::VERTEX,
+            usage: BufferUsages::VERTEX | BufferUsages::COPY_DST,
         });
 
         let push_constants = PushConstants {
@@ -283,7 +283,7 @@ impl State {
 
     pub fn update(&mut self) {
         // update simulation state
-        (0..5).for_each(|_| self.simulation.update());
+        self.simulation.update();
 
         // update instance buffer
         self.instances
@@ -293,13 +293,6 @@ impl State {
                 let position = self.simulation.stars[i].pos();
                 instance.position = [position.x, position.y];
             });
-
-        self.instance_buffer.destroy();
-        self.instance_buffer = self.device.create_buffer_init(&BufferInitDescriptor {
-            label: None,
-            contents: bytemuck::cast_slice(&self.instances),
-            usage: BufferUsages::VERTEX,
-        });
     }
 
     pub fn render(&mut self) -> Result<(), SurfaceError> {
@@ -337,6 +330,12 @@ impl State {
 
             render_pass.draw_indexed(0..self.index_count, 0, 0..self.instances.len() as u32);
         }
+
+        self.queue.write_buffer(
+            &self.instance_buffer,
+            0,
+            bytemuck::cast_slice(&self.instances),
+        );
         self.queue.submit(Some(command_encoder.finish()));
 
         current_texture.present();

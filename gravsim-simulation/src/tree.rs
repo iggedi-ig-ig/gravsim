@@ -1,4 +1,4 @@
-use crate::simulation::MassData;
+use crate::MassData;
 use crate::Simulation;
 use nalgebra::Vector2;
 use num_enum::TryFromPrimitive;

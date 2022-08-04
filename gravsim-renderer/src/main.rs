@@ -1,9 +1,7 @@
-pub mod simulation;
 pub mod state;
-pub mod tree;
 
-use crate::simulation::{MassDistribution, Simulation, Star};
 use crate::state::State;
+use gravsim_simulation::{MassDistribution, Simulation, Star};
 use nalgebra::{Vector2, Vector3};
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
