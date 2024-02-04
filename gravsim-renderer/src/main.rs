@@ -1,8 +1,8 @@
 pub mod state;
 
 use crate::state::State;
-use gravsim_simulation::{MassDistribution, Simulation, Star};
-use nalgebra::{Vector2, Vector3};
+use gravsim_simulation::{Galaxy, MassDistribution, Simulation, Star};
+use nalgebra::Vector2;
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use std::time::{Duration, Instant};
@@ -11,35 +11,24 @@ use winit::event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEve
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::Window;
 
+const N_STARS: usize = 100_000;
+
 #[tokio::main]
 async fn main() {
+
     let event_loop = EventLoop::new();
     let window = Window::new(&event_loop).expect("failed to create window");
 
+    let mass_distribution = MassDistribution::new(35.0, 200.0);
     let mut rng = StdRng::from_entropy();
-    let mass_distribution = MassDistribution::new(75.0, 500.0);
-    let center_star = Star::new(Vector2::zeros(), Vector2::zeros(), 1_000_000.0);
-    let simulation = Simulation::new(
-        (0..25_000)
-            .map(|_| {
-                let a = rng.gen::<f32>() * std::f32::consts::TAU;
-                let d = 500.0 * (rng.gen::<f32>()).sqrt();
-                let mass = 1.0 + mass_distribution.sample(rng.gen());
-
-                let pos = Vector2::new(a.sin(), a.cos()) * d;
-                let n = Vector3::cross(&*Vector3::z_axis(), &Vector3::new(pos.x, pos.y, 0.0));
-
-                Star::new(
-                    pos,
-                    n.xy().normalize()
-                        * (0.5 + rng.gen::<f32>())
-                        * (Simulation::GRAVITY * (mass + center_star.mass()) / d).sqrt(),
-                    mass,
-                )
-            })
-            .chain(Some(center_star)),
-        mass_distribution,
-    );
+    let simulation = Simulation::new((0..N_STARS).map(|_| {
+        Star::new(
+            Vector2::from_fn(|_, _| rng.gen::<f32>() * 500.0 - 250.0),
+            Vector2::zeros(),
+            [1.0; 3],
+            mass_distribution.sample(rng.gen()),
+        )
+    }));
 
     let mut state = State::new(&window, simulation).await;
     let mut last = Instant::now();

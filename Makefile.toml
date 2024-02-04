@@ -1,0 +1,6 @@
+[tasks.build]
+condition_script = [
+    "./compile.sh"
+]
+command = "cargo"
+args = ["build"]

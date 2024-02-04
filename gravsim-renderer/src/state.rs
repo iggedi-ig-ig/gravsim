@@ -187,7 +187,7 @@ impl State {
             .iter()
             .map(|star| RenderInstance {
                 position: [star.pos().x, star.pos().y],
-                color: star.color(&simulation.mass_dist),
+                color: star.color(),
                 radius: star.radius(),
             })
             .collect();
