@@ -1,4 +1,4 @@
-This is an implementation of the barnes-hut algorithm, which allows to simulate n body systems in O(n log n) time.
+This is an implementation of the barnes-hut algorithm, which allows simulating n body systems in O(n log n) time.
 It also includes a a simple particle renderer for the "stars".
 
 # ⚠️ Warning ⚠️
