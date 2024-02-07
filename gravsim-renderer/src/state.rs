@@ -71,7 +71,7 @@ pub struct State {
 }
 
 impl State {
-    const VERTEX_COUNT: usize = 25;
+    const VERTEX_COUNT: usize = 6;
 
     pub async fn new(window: &Window, simulation: Simulation) -> Self {
         let size = window.inner_size();
@@ -283,7 +283,10 @@ impl State {
 
     pub fn update(&mut self) {
         // update simulation state
-        self.simulation.update();
+        const SUBSTEPS: u32 = 4;
+        for _ in 0..SUBSTEPS {
+            self.simulation.update();
+        }
 
         // update instance buffer
         self.instances

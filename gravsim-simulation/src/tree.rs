@@ -2,7 +2,6 @@ use crate::MassData;
 use crate::Simulation;
 use nalgebra::Vector2;
 use num_enum::TryFromPrimitive;
-use smallvec::{smallvec, SmallVec};
 use std::collections::VecDeque;
 
 /// represents one quadrant of a node.
@@ -48,7 +47,7 @@ pub struct Node {
     scale: f32,
 
     center_of_mass: MassData,
-    children: SmallVec<[Option<Box<Node>>; 4]>,
+    children: [Option<Box<Node>>; 4],
     leaf: bool,
 }
 
@@ -61,7 +60,7 @@ impl Node {
                 position: Default::default(),
                 mass: 0.0,
             },
-            children: smallvec![None; 4],
+            children: [None, None, None, None],
             leaf: true,
         }
     }
@@ -71,7 +70,7 @@ impl Node {
             pos: parent.pos + quadrant.offset() * parent.scale * 0.5,
             scale: parent.scale * 0.5,
             center_of_mass: mass_data,
-            children: smallvec![None; 4],
+            children: [None, None, None, None],
             leaf: true,
         })
     }
@@ -128,15 +127,20 @@ impl Node {
         let mut queue = VecDeque::from([self]);
         while let Some(node) = queue.pop_front() {
             let diff = node.center_of_mass.position - obj.position;
-            let dist = (EPSILON + diff.norm_squared()).sqrt();
+            let dist_sq = diff.norm_squared();
+            if !dist_sq.is_normal() {
+                continue;
+            }
 
+            let dist = (EPSILON + dist_sq).sqrt();
             let q = node.scale / dist;
             if q < Simulation::THETA || node.is_leaf() {
                 force_part += diff / dist.powi(3) * node.center_of_mass.mass;
             } else {
-                queue.extend(node.children.iter().flatten().map(|n| n.as_ref()));
+                queue.extend(node.children.iter().filter_map(|child| child.as_deref()));
             }
         }
+
         Simulation::GRAVITY * obj.mass * force_part
     }
 

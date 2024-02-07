@@ -2,7 +2,7 @@ pub mod state;
 
 use crate::state::State;
 use gravsim_simulation::{Galaxy, MassDistribution, Simulation, Star};
-use nalgebra::Vector2;
+use nalgebra::{Vector2, Vector3};
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use std::time::{Duration, Instant};
@@ -11,24 +11,21 @@ use winit::event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEve
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::Window;
 
-const N_STARS: usize = 100_000;
-
 #[tokio::main]
 async fn main() {
-
     let event_loop = EventLoop::new();
     let window = Window::new(&event_loop).expect("failed to create window");
 
-    let mass_distribution = MassDistribution::new(35.0, 200.0);
-    let mut rng = StdRng::from_entropy();
-    let simulation = Simulation::new((0..N_STARS).map(|_| {
-        Star::new(
-            Vector2::from_fn(|_, _| rng.gen::<f32>() * 500.0 - 250.0),
-            Vector2::zeros(),
-            [1.0; 3],
-            mass_distribution.sample(rng.gen()),
-        )
-    }));
+    let mass_distribution = MassDistribution::new(100.0, 15000.0);
+    let galaxy = Galaxy::new(
+        Star::new(Vector2::zeros(), Vector2::zeros(), [1.0; 3], 1e1),
+        Simulation::N_STARS,
+        10_000.0,
+        &mass_distribution,
+        [1.0; 3],
+    );
+
+    let simulation = Simulation::new(galaxy.into_stars());
 
     let mut state = State::new(&window, simulation).await;
     let mut last = Instant::now();

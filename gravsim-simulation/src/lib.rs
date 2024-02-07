@@ -57,8 +57,9 @@ pub struct Simulation {
 }
 
 impl Simulation {
-    pub const SCALE: f32 = 5000.0;
-    pub const THETA: f32 = 1.25;
+    pub const SCALE: f32 = 50000.0;
+    pub const N_STARS: usize = 5_000;
+    pub const THETA: f32 = 0.5;
     pub const GRAVITY: f32 = 1e-4;
 
     pub fn new<I>(stars: I) -> Self
@@ -139,8 +140,12 @@ impl Galaxy {
         }
     }
 
-    pub fn stars(&self) -> &Vec<Star> {
+    pub fn stars(&self) -> &[Star] {
         &self.stars
+    }
+
+    pub fn into_stars(self) -> Vec<Star> {
+        self.stars
     }
 }
 
@@ -151,7 +156,7 @@ pub struct MassDistribution {
 }
 
 impl MassDistribution {
-    pub fn new(alpha: f32, max_mass: f32) -> Self {
+    pub const fn new(alpha: f32, max_mass: f32) -> Self {
         Self { alpha, max_mass }
     }
 }
